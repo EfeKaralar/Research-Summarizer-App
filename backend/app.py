@@ -6,9 +6,11 @@ from typing import List, Optional
 import os
 import datetime
 import uuid
-from database import get_db, SessionLocal
+from database import get_db, SessionLocal, create_tables
 from models import Query, Summary
 import summarizer_integration
+
+create_tables()
 
 app = FastAPI(
     title="Research Paper Summarizer API",
