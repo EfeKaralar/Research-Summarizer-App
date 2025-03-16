@@ -14,7 +14,7 @@ def run_search(session_id, query, num_results, sort_by_date, provider, full_text
         
         # Build command to run your existing Python script
         cmd = [
-            "python", "research-summarizer.py", "search", query,
+            "python", "research_summarizer.py", "search", query,
             "-n", str(num_results),
             "-o", output_dir,
             "-p", provider
@@ -89,7 +89,7 @@ def run_analysis(session_id, db):
         
         # Build command to run your existing analysis script
         cmd = [
-            "python", "research-summarizer.py", "analyze", dir_path
+            "python", "research_summarizer.py", "analyze", dir_path
         ]
         
         # Run the command
