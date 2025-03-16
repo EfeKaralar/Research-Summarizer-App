@@ -11,7 +11,22 @@ def run_search(session_id, query, num_results, sort_by_date, provider, full_text
         # Create output directory based on session_id
         output_dir = os.path.join("summaries", session_id)
         os.makedirs(output_dir, exist_ok=True)
+
+
+        # Print the current working directory
+        print(f"Current working directory: {os.getcwd()}")
+
+        # Check if the script exists
+        script_path = "research_summarizer.py"
+        if not os.path.exists(script_path):
+            print(f"ERROR: Script not found at {script_path}")
+            script_path = os.path.join(os.getcwd(), "research_summarizer.py")
+            if os.path.exists(script_path):
+                print(f"Found script at {script_path}")
+            else:
+                print(f"Still can't find script at {script_path}")
         
+
         # Build command to run your existing Python script
         cmd = [
             "python", "research_summarizer.py", "search", query,
@@ -25,6 +40,13 @@ def run_search(session_id, query, num_results, sort_by_date, provider, full_text
         
         if full_text:
             cmd.append("-f")
+
+        # Get API key from environment variable
+        api_key = os.environ.get("API_KEY")
+        if api_key:
+            cmd.extend(["-a", api_key])     
+
+        print(f"Running command: {' '.join(cmd)}")  
         
         # Run the command
         process = subprocess.Popen(
@@ -33,9 +55,17 @@ def run_search(session_id, query, num_results, sort_by_date, provider, full_text
             stderr=subprocess.PIPE
         )
         stdout, stderr = process.communicate()
-        
+
+        # Decode the bytes to text
+        stdout_text=stdout.decode('utf-8')
+        stderr_text=stderr.decode('utf-8')
+
+        print(f"Command output: {stdout_text}")
+        print(f"Command error: {stderr_text}")
+
         if process.returncode != 0:
             # Handle error
+            print(f"Process failed with return code {process.returncode}")
             query_obj = db.query(Query).filter(Query.id == session_id).first()
             query_obj.status = "failed"
             db.commit()
@@ -44,7 +74,11 @@ def run_search(session_id, query, num_results, sort_by_date, provider, full_text
         # Process completed successfully
         query_obj = db.query(Query).filter(Query.id == session_id).first()
         query_obj.status = "completed"
-        
+
+        print(f"Found {len(os.listdir(output_dir))} files in output directory")
+        print(f"Files: {os.listdir(output_dir)}")
+
+
         # Scan the output directory for summaries and add to database
         for filename in os.listdir(output_dir):
             if filename.startswith("_"):  # Skip session info and analysis files
@@ -72,8 +106,11 @@ def run_search(session_id, query, num_results, sort_by_date, provider, full_text
                 content=content
             )
             db.add(summary)
+            print(f"Added summary to database: {summary.id}")   
         
         db.commit()
+        print("Database commit complete")
+
     except Exception as e:
         # Handle any exceptions
         query_obj = db.query(Query).filter(Query.id == session_id).first()

@@ -10,6 +10,9 @@ from database import get_db, SessionLocal, create_tables
 from models import Query, Summary
 import summarizer_integration
 
+API_KEY = os.environ.get("API_KEY")
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "deepseek")
+
 create_tables()
 
 app = FastAPI(
@@ -70,6 +73,8 @@ async def search_papers(request: SearchRequest, background_tasks: BackgroundTask
     )
     db.add(new_query)
     db.commit()
+
+    provider = request.provider or LLM_PROVIDER
     
     # Run search and summarization in background
     background_tasks.add_task(
@@ -78,7 +83,7 @@ async def search_papers(request: SearchRequest, background_tasks: BackgroundTask
         query=request.query,
         num_results=request.num_results,
         sort_by_date=request.sort_by_date,
-        provider=request.provider,
+        provider=provider,
         full_text=request.full_text,
         db=db
     )

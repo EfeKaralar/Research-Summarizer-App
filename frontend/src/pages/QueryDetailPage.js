@@ -46,46 +46,63 @@ const QueryDetailPage = () => {
   
   // Function to fetch data
   const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // Fetch query details
-      const queryResponse = await api.get(`/queries/${id}`);
-      setQuery(queryResponse.data);
-      
-      // Fetch summaries
-      const summariesResponse = await api.get(`/queries/${id}/summaries`);
-      setSummaries(summariesResponse.data);
-      
-      // Fetch analysis if available
-      if (['completed', 'analyzing'].includes(queryResponse.data.status)) {
-        const analysisResponse = await api.get(`/analysis/${id}`);
-        setAnalysis(analysisResponse.data);
+    // Only proceed if not already loading
+    if (!isLoading) {
+      setIsLoading(true);
+      try {
+        // Fetch query details
+        const queryResponse = await api.get(`/queries/${id}`);
+        
+        // Only update state if status has changed
+        if (!query || query.status !== queryResponse.data.status) {
+          setQuery(queryResponse.data);
+          
+          // Only fetch summaries if status is completed
+          if (queryResponse.data.status === 'completed') {
+            const summariesResponse = await api.get(`/queries/${id}/summaries`);
+            setSummaries(summariesResponse.data);
+            
+            // Fetch analysis if available
+            const analysisResponse = await api.get(`/analysis/${id}`);
+            setAnalysis(analysisResponse.data);
+          }
+        }
+        
+        setError(null);
+      } catch (error) {
+        setError('Failed to load data. Please try again later.');
+        console.error('Error fetching data:', error);
+      } finally {
+        setIsLoading(false);
       }
-      
-      setError(null);
-    } catch (error) {
-      setError('Failed to load data. Please try again later.');
-      console.error('Error fetching data:', error);
-    } finally {
-      setIsLoading(false);
     }
-  }, [id]);
+  }, [id, query, isLoading]);
   
   // Initial data load
   useEffect(() => {
+    setIsLoading(true);
     fetchData();
+  }, []);
+  
+  // Polling for updates
+  useEffect(() => {
+    // Only set up polling if we're in a processing state
+    let intervalId;
+    if (query && ['processing', 'analyzing'].includes(query.status)) {
+      intervalId = setInterval(() => {
+        // Don't fetch if already loading
+        if (!isLoading) {
+          fetchData();
+        }
+      }, 10000); // Check every 10 seconds
+    }
     
-    // Poll for updates if processing or analyzing
-    const intervalId = setInterval(() => {
-      if (query && ['processing', 'analyzing'].includes(query.status)) {
-        fetchData();
-      } else {
+    return () => {
+      if (intervalId) {
         clearInterval(intervalId);
       }
-    }, 5000); // Check every 5 seconds
-    
-    return () => clearInterval(intervalId);
-  }, [fetchData, query]);
+    };
+  }, [fetchData, query, isLoading]);
   
   // Function to start analysis
   const handleStartAnalysis = async () => {
@@ -140,7 +157,8 @@ const QueryDetailPage = () => {
     );
   };
   
-  if (isLoading) {
+  // Conditional rendering for initial loading state
+  if (isLoading && !query) {
     return (
       <Container maxW="container.xl" py={8}>
         <VStack spacing={8} align="center" justify="center" minH="50vh">
@@ -151,6 +169,7 @@ const QueryDetailPage = () => {
     );
   }
   
+  // Conditional rendering for error state
   if (error || !query) {
     return (
       <Container maxW="container.xl" py={8}>
@@ -170,6 +189,47 @@ const QueryDetailPage = () => {
     );
   }
   
+  // Conditional rendering for processing state
+  if (query && ['processing', 'analyzing'].includes(query.status)) {
+    return (
+      <Container maxW="container.xl" py={8}>
+        <VStack spacing={8} align="stretch">
+          <HStack justify="space-between">
+            <Button
+              as={RouterLink}
+              to="/queries"
+              leftIcon={<FaArrowLeft />}
+              variant="outline"
+            >
+              Back to Queries
+            </Button>
+            <Heading as="h1" size="xl" color="brand.700">
+              Processing Search
+            </Heading>
+            <Box w="100px" />
+          </HStack>
+          
+          <Card variant="outline" p={6}>
+            <CardBody>
+              <VStack spacing={6} align="center" py={10}>
+                <Spinner size="xl" thickness="4px" color="brand.500" />
+                <Text fontSize="lg">
+                  {query.status === 'processing' 
+                    ? `Processing search query: "${query.query}"`
+                    : 'Generating comparative analysis...'}
+                </Text>
+                <Text color="gray.500">
+                  This may take several minutes depending on the number of papers.
+                </Text>
+              </VStack>
+            </CardBody>
+          </Card>
+        </VStack>
+      </Container>
+    );
+  }
+  
+  // Main render for completed state
   return (
     <Container maxW="container.xl" py={8}>
       <VStack spacing={8} align="stretch">
@@ -194,7 +254,11 @@ const QueryDetailPage = () => {
           <IconButton
             icon={<FaSyncAlt />}
             aria-label="Refresh data"
-            onClick={fetchData}
+            onClick={() => {
+              if (!isLoading) {
+                fetchData();
+              }
+            }}
             isLoading={isLoading}
           />
         </HStack>
@@ -230,16 +294,6 @@ const QueryDetailPage = () => {
             )}
           </CardBody>
         </Card>
-        
-        {/* Processing Status */}
-        {['processing', 'analyzing'].includes(query.status) && (
-          <Alert status="info" borderRadius="lg">
-            <AlertIcon />
-            {query.status === 'processing' 
-              ? 'Your search is being processed. This may take a few minutes...'
-              : 'Generating comparative analysis. This may take a few minutes...'}
-          </Alert>
-        )}
         
         {/* Content Tabs */}
         {query.status === 'completed' && (
