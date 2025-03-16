@@ -141,6 +141,22 @@ def get_analysis(session_id: str, db: SessionLocal = Depends(get_db)):
     
     return {"status": "completed", "content": content}
 
+@app.delete("/api/queries/{query_id}")
+def delete_query(query_id: str, db: SessionLocal = Depends(get_db)):
+    """Delete a specific query and its associated summaries"""
+    query = db.query(Query).filter(Query.id == query_id).first()
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+    
+    # Delete associated summaries first (due to foreign key constraints)
+    db.query(Summary).filter(Summary.query_id == query_id).delete()
+    
+    # Then delete the query
+    db.delete(query)
+    db.commit()
+    
+    return {"message": f"Query {query_id} deleted successfully"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

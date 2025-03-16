@@ -20,9 +20,10 @@ import {
   Alert,
   AlertIcon,
   Button,
-  useColorModeValue
+  useColorModeValue,
+  useToast
 } from '@chakra-ui/react';
-import { FaArrowLeft, FaSearch } from 'react-icons/fa';
+import { FaArrowLeft, FaSearch, FaTrash } from 'react-icons/fa';
 import api from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -30,6 +31,7 @@ const QueryListPage = () => {
   const [queries, setQueries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const toast = useToast();
   
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -42,13 +44,49 @@ const QueryListPage = () => {
     setIsLoading(true);
     try {
       const response = await api.get('/queries');
-      setQueries(response.data);
+      
+      // Sanitize the query data to remove any invalid characters
+      const sanitizedQueries = response.data.map(query => ({
+        ...query,
+        query: query.query ? String(query.query).replace(/[\u0000-\u001F\u007F-\u009F]/g, '') : 'Unknown query',
+        timestamp: query.timestamp || new Date().toISOString(),
+        status: query.status || 'unknown',
+        provider: query.provider ? String(query.provider).replace(/[\u0000-\u001F\u007F-\u009F]/g, '') : 'unknown'
+      }));
+      
+      setQueries(sanitizedQueries);
       setError(null);
     } catch (error) {
-      setError('Failed to fetch queries. Please try again later.');
       console.error('Error fetching queries:', error);
+      setError('Failed to fetch queries. Please try again later.');
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const deleteQuery = async (id) => {
+    if (window.confirm("Are you sure you want to delete this search?")) {
+      try {
+        await api.delete(`/queries/${id}`);
+        // Refresh the list after deletion
+        fetchQueries();
+        toast({
+          title: "Success",
+          description: "Search deleted successfully",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      } catch (error) {
+        console.error("Error deleting query:", error);
+        toast({
+          title: "Error",
+          description: "Failed to delete search",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
     }
   };
   
@@ -72,9 +110,18 @@ const QueryListPage = () => {
     
     return (
       <Badge colorScheme={colorScheme} px={2} py={1} borderRadius="md">
-        {status}
+        {status || 'unknown'}
       </Badge>
     );
+  };
+  
+  const formatTimeAgo = (timestamp) => {
+    try {
+      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+    } catch (error) {
+      console.error('Invalid date format:', timestamp);
+      return 'Unknown time';
+    }
   };
   
   return (
@@ -128,6 +175,7 @@ const QueryListPage = () => {
                   <Th>Papers</Th>
                   <Th>Provider</Th>
                   <Th>Status</Th>
+                  <Th>Actions</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -140,21 +188,47 @@ const QueryListPage = () => {
                         color="brand.600"
                         fontWeight="medium"
                       >
-                        {query.query}
+                        {query.query ? String(query.query).substring(0, 50) : 'Unknown query'}
+                        {query.query && query.query.length > 50 ? '...' : ''}
                       </Link>
                     </Td>
                     <Td>
-                      {formatDistanceToNow(new Date(query.timestamp), { addSuffix: true })}
+                      {formatTimeAgo(query.timestamp)}
                     </Td>
-                    <Td>{query.num_papers}</Td>
-                    <Td>{query.provider}</Td>
+                    <Td>{query.num_papers || 0}</Td>
+                    <Td>{query.provider || 'unknown'}</Td>
                     <Td>{getStatusBadge(query.status)}</Td>
+                    <Td>
+                      <Button
+                        size="sm"
+                        colorScheme="red"
+                        variant="ghost"
+                        leftIcon={<FaTrash />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteQuery(query.id);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </Td>
                   </Tr>
                 ))}
               </Tbody>
             </Table>
           </Box>
         )}
+        
+        {/* Refresh button */}
+        <Box mt={4}>
+          <Button 
+            onClick={fetchQueries}
+            colorScheme="brand"
+            isLoading={isLoading}
+          >
+            Refresh Queries
+          </Button>
+        </Box>
       </VStack>
     </Container>
   );
