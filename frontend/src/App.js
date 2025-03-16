@@ -4,7 +4,7 @@ import { ChakraProvider, extendTheme } from '@chakra-ui/react';
 
 // Import pages
 import HomePage from './pages/HomePage';
-import QueryListPage from './pages/QueryListPage';
+import QueryListPage from './pages/QueryListPage.js';
 import QueryDetailPage from './pages/QueryDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
 

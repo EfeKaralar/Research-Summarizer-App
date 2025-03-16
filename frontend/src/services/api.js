@@ -4,7 +4,7 @@ import axios from 'axios';
 // Uncomment for local deployment
 // const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 // Uncomment for deployment on Render.com
-const baseURL = process.env.REACT_APP_API_URL || 'https://research-summarizer-app.onrender.com//api';
+const baseURL = process.env.REACT_APP_API_URL || 'https://research-summarizer-api.onrender.com/api';
 
 
 const api = axios.create({
