@@ -44,56 +44,55 @@ const QueryDetailPage = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState(null);
   
-  // Function to fetch data
+  // Function to fetch data with improved debugging
   const fetchData = useCallback(async () => {
-    // Only proceed if not already loading
-    if (!isLoading) {
+    try {
+      console.log("Fetching data for query:", id);
       setIsLoading(true);
-      try {
-        // Fetch query details
-        const queryResponse = await api.get(`/queries/${id}`);
+      
+      // Fetch query details
+      const queryResponse = await api.get(`/queries/${id}`);
+      console.log("Query response:", queryResponse.data);
+      setQuery(queryResponse.data);
+      
+      // Only fetch summaries if status is completed
+      if (queryResponse.data.status === 'completed') {
+        console.log("Status is completed, fetching summaries");
+        const summariesResponse = await api.get(`/queries/${id}/summaries`);
+        console.log("Summaries response:", summariesResponse.data);
+        setSummaries(summariesResponse.data);
         
-        // Only update state if status has changed
-        if (!query || query.status !== queryResponse.data.status) {
-          setQuery(queryResponse.data);
-          
-          // Only fetch summaries if status is completed
-          if (queryResponse.data.status === 'completed') {
-            const summariesResponse = await api.get(`/queries/${id}/summaries`);
-            setSummaries(summariesResponse.data);
-            
-            // Fetch analysis if available
-            const analysisResponse = await api.get(`/analysis/${id}`);
-            setAnalysis(analysisResponse.data);
-          }
-        }
-        
-        setError(null);
-      } catch (error) {
-        setError('Failed to load data. Please try again later.');
-        console.error('Error fetching data:', error);
-      } finally {
-        setIsLoading(false);
+        // Fetch analysis if available
+        const analysisResponse = await api.get(`/analysis/${id}`);
+        console.log("Analysis response:", analysisResponse.data);
+        setAnalysis(analysisResponse.data);
       }
+      
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError('Failed to load data. Please try again later.');
+    } finally {
+      setIsLoading(false);
     }
-  }, [id, query, isLoading]);
+  }, [id]);
   
   // Initial data load
   useEffect(() => {
-    setIsLoading(true);
+    console.log("Initial effect running, id:", id);
     fetchData();
-  }, []);
+    // Don't include fetchData in dependencies for initial load
+  }, [id]);
   
   // Polling for updates
   useEffect(() => {
     // Only set up polling if we're in a processing state
     let intervalId;
     if (query && ['processing', 'analyzing'].includes(query.status)) {
+      console.log("Setting up polling for status updates");
       intervalId = setInterval(() => {
-        // Don't fetch if already loading
-        if (!isLoading) {
-          fetchData();
-        }
+        console.log("Polling for updates...");
+        fetchData();
       }, 10000); // Check every 10 seconds
     }
     
@@ -102,7 +101,7 @@ const QueryDetailPage = () => {
         clearInterval(intervalId);
       }
     };
-  }, [fetchData, query, isLoading]);
+  }, [query, fetchData]);
   
   // Function to start analysis
   const handleStartAnalysis = async () => {
@@ -164,6 +163,21 @@ const QueryDetailPage = () => {
         <VStack spacing={8} align="center" justify="center" minH="50vh">
           <Spinner size="xl" color="brand.500" thickness="4px" />
           <Text>Loading research data...</Text>
+          
+          {/* Emergency refresh button */}
+          <Button
+            colorScheme="red"
+            size="lg"
+            onClick={() => {
+              console.log("Emergency refresh triggered");
+              setIsLoading(false);  // Force reset loading state
+              setTimeout(() => {    // Wait a moment before fetching
+                fetchData();
+              }, 100);
+            }}
+          >
+            EMERGENCY REFRESH
+          </Button>
         </VStack>
       </Container>
     );
@@ -206,7 +220,16 @@ const QueryDetailPage = () => {
             <Heading as="h1" size="xl" color="brand.700">
               Processing Search
             </Heading>
-            <Box w="100px" />
+            <Button
+              colorScheme="brand"
+              onClick={() => {
+                console.log("Force refreshing data");
+                fetchData();
+              }}
+              leftIcon={<FaSyncAlt />}
+            >
+              Refresh Status
+            </Button>
           </HStack>
           
           <Card variant="outline" p={6}>
@@ -224,6 +247,9 @@ const QueryDetailPage = () => {
               </VStack>
             </CardBody>
           </Card>
+          
+          {/* Debug panel */}
+          <DebugPanel id={id} />
         </VStack>
       </Container>
     );
@@ -251,16 +277,17 @@ const QueryDetailPage = () => {
               {formatDistanceToNow(new Date(query.timestamp), { addSuffix: true })}
             </Text>
           </Box>
-          <IconButton
-            icon={<FaSyncAlt />}
-            aria-label="Refresh data"
+          {/* Updated refresh button */}
+          <Button
+            colorScheme="brand"
             onClick={() => {
-              if (!isLoading) {
-                fetchData();
-              }
+              console.log("Force refreshing data");
+              fetchData();
             }}
-            isLoading={isLoading}
-          />
+            leftIcon={<FaSyncAlt />}
+          >
+            Refresh Data
+          </Button>
         </HStack>
         
         {/* Query Info Card */}
@@ -306,11 +333,27 @@ const QueryDetailPage = () => {
             <TabPanels>
               {/* Paper Summaries Tab */}
               <TabPanel p={0} pt={4}>
-                <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
-                  {summaries.map((summary) => (
-                    <SummaryCard key={summary.id} summary={summary} />
-                  ))}
-                </SimpleGrid>
+                {summaries.length > 0 ? (
+                  <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
+                    {summaries.map((summary) => (
+                      <SummaryCard key={summary.id} summary={summary} />
+                    ))}
+                  </SimpleGrid>
+                ) : (
+                  <Card variant="outline">
+                    <CardBody>
+                      <VStack spacing={4} align="center" py={8}>
+                        <Text>No summaries found.</Text>
+                        <Button
+                          colorScheme="brand"
+                          onClick={fetchData}
+                        >
+                          Refresh Data
+                        </Button>
+                      </VStack>
+                    </CardBody>
+                  </Card>
+                )}
               </TabPanel>
               
               {/* Comparative Analysis Tab */}
@@ -350,6 +393,9 @@ const QueryDetailPage = () => {
             </TabPanels>
           </Tabs>
         )}
+        
+        {/* Debug panel - remove in production */}
+        <DebugPanel id={id} />
       </VStack>
     </Container>
   );
@@ -412,6 +458,54 @@ const MarkdownCard = ({ title, content }) => {
         <Box>
           <ReactMarkdown>{content}</ReactMarkdown>
         </Box>
+      </CardBody>
+    </Card>
+  );
+};
+
+// Debug Component
+const DebugPanel = ({ id }) => {
+  const [debugOutput, setDebugOutput] = useState("");
+  
+  const testApi = async (endpoint) => {
+    try {
+      setDebugOutput(`Testing ${endpoint}...`);
+      const response = await api.get(endpoint);
+      setDebugOutput(JSON.stringify(response.data, null, 2));
+      console.log("API Response:", response.data);
+    } catch (error) {
+      setDebugOutput(`Error: ${error.message}\n${JSON.stringify(error.response?.data || {}, null, 2)}`);
+      console.error("API Error:", error);
+    }
+  };
+  
+  return (
+    <Card mt={8} variant="outline" bg="gray.50">
+      <CardHeader>
+        <Heading size="md">Debug Panel</Heading>
+      </CardHeader>
+      <CardBody>
+        <VStack spacing={4} align="stretch">
+          <HStack>
+            <Button onClick={() => testApi(`/queries/${id}`)}>
+              Test Query API
+            </Button>
+            <Button onClick={() => testApi(`/queries/${id}/summaries`)}>
+              Test Summaries API
+            </Button>
+          </HStack>
+          <Box 
+            bg="black" 
+            color="green.300" 
+            p={4} 
+            borderRadius="md" 
+            fontFamily="monospace"
+            overflowX="auto"
+            minH="200px"
+          >
+            <pre>{debugOutput || "Click a button to test API"}</pre>
+          </Box>
+        </VStack>
       </CardBody>
     </Card>
   );

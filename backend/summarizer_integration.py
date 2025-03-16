@@ -111,6 +111,15 @@ def run_search(session_id, query, num_results, sort_by_date, provider, full_text
         db.commit()
         print("Database commit complete")
 
+         # After successful execution, update to completed
+        query_obj = db.query(Query).filter(Query.id == session_id).first()
+        if query_obj:
+            print(f"Updating query status to completed: {session_id}")
+            query_obj.status = "completed"
+            db.commit()
+        else:
+            print(f"ERROR: Could not find query with id: {session_id}")
+
     except Exception as e:
         # Handle any exceptions
         query_obj = db.query(Query).filter(Query.id == session_id).first()
