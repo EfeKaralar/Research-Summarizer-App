@@ -1,0 +1,24 @@
+services:
+  - name: research-summarizer-api
+    type: web
+    env: python
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHONPATH
+        value: ./backend
+  - name: research-summarizer-web
+    type: web
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/build
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          name: research-summarizer-api
+          type: web
+          property: url
+
+databases:
+  - name: research-summarizer-db
+    databaseName: research_summarizer
